@@ -544,6 +544,15 @@ world.setVillageDamage = function(level){
   if(world.villagers) world.villagers.visible = level === "intact" || level === "minor";
 };
 
+/* lit windows at night (only while the village stands) */
+world.updateWindows = function(){
+  const w = world.houseParts && world.houseParts.win; if(!w) return;
+  const lit = world.damage === "intact" || world.damage === "minor" ? (world._winGlow || 0) : 0;
+  const col = new THREE.Color(), dark = new THREE.Color(0x251c14), warm = new THREE.Color(0xffb35a);
+  for(let i = 0; i < w.list.length; i++){ col.copy(dark).lerp(warm, lit); w.mesh.setColorAt(i, col); }
+  w.mesh.instanceColor.needsUpdate = true;
+};
+
 /* ====================================================================
    SITES — props for each of the ten crossroads (team/solo variants)
    ==================================================================== */
@@ -1011,7 +1020,7 @@ world.update = function(dt, t, ctx){
   }
   /* windows glow at night */
   const wg = night > 0.3 ? 0.85 : night * 1.5;
-  if(Math.abs((world._winGlow || 0) - wg) > 0.04){ world._winGlow = wg; world.setVillageDamage(world.damage); }
+  if(Math.abs((world._winGlow || 0) - wg) > 0.04){ world._winGlow = wg; world.updateWindows(); }
   if(world.lanternWindow){ world.lanternWindow.glow.material.opacity = night * 0.9; world.lanternWindow.win.material.color.setRGB(0.25 + night * 0.75, 0.18 + night * 0.52, 0.1 + night * 0.25); }
   if(world.rune) world.rune.material.color.setRGB(1, 0.55 + 0.25 * Math.sin(t * 2), 0.2);
 

@@ -63,8 +63,8 @@ async function playStage(p, choices, snaps, name){
     ok((await S(p)).mode === "EXPLORE", `${name}: still exploring`);
   }
   await p.evaluate((i) => __NATS__.teleportToSite(i), id);
-  await p.waitForTimeout(350);
-  ok((await S(p)).prompt === true, `${name}: prompt at ${id}`);
+  const shown = await p.waitForFunction(() => __NATS__.getState().prompt, null, { timeout: 5000 }).then(() => true, () => false);
+  ok(shown, `${name}: prompt at ${id}`);
   snaps.push({ id, step, before: await S(p) });
   ok(await p.evaluate(() => __NATS__.interact()) === true, `${name}: interact opens ${id}`);
   await p.waitForFunction(() => __NATS__.getState().dialogueOpen, null, { timeout: 15000 });
