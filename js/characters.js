@@ -220,12 +220,28 @@ const devi = {
     this.light = new THREE.PointLight(0xff3020, 0, 40, 1.5); scene.add(this.light);
   },
   setSpot(spot, instant){
-    this.spot = spot;
+    this.spot = spot; this.route = null;
     if(spot){ this.actor.place(spot[0], spot[2]); this.actor.y = spot[1]; }
+  },
+  /* walk between two points: loop = pace back and forth (on his ridge), else walk once */
+  walk(ax, az, bx, bz, speed, loop, t0){
+    const len = Math.hypot(bx - ax, bz - az);
+    this.route = { ax, az, bx, bz, len, sp: speed, loop: !!loop, t: t0 || 0, dir: 1 };
   },
   update(dt, t){
     const a = this.actor;
     a.speed = 0;
+    if(this.route){
+      const r = this.route;
+      r.t += dt * r.sp / Math.max(r.len, 0.01) * r.dir;
+      if(r.loop){ if(r.t > 1){ r.t = 1; r.dir = -1; } if(r.t < 0){ r.t = 0; r.dir = 1; } } else r.t = Math.min(1, r.t);
+      const x = r.ax + (r.bx - r.ax) * r.t, z = r.az + (r.bz - r.az) * r.t;
+      this.spot = [x, T.ground(x, z), z];
+      const moving = r.loop || r.t < 1;
+      a.vx = (r.bx - r.ax) / r.len * r.sp * r.dir * (moving ? 1 : 0); a.vz = (r.bz - r.az) / r.len * r.sp * r.dir * (moving ? 1 : 0);
+      a.speed = moving ? r.sp * 0.32 : 0;
+      if(moving && this.onStep){ r.stepT = (r.stepT || 0) - dt; if(r.stepT <= 0){ r.stepT = 1.1; this.onStep(this, x, z); } }
+    } else { a.vx = a.vz = 0; }
     if(this.spot){ a.x = this.spot[0]; a.z = this.spot[2]; a.y = this.spot[1] - (1 - this.rise) * a.H * 0.9; }
     a.mat.uniforms.uRed.value = 0.25 + 0.2 * Math.sin(t * Math.PI * 2 / 3.6);
     const vis = a.opacity;

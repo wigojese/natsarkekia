@@ -13,6 +13,9 @@ const world = { sites: {}, fires: [], smokeEmitters: [], variants: {}, devSpots:
 /* Devi's watch spots far away on ridges (§4.1): keep the line of sight from the site clear */
 const DEVI_FAR = { 4: [95, 14], 5: [62, -70] };
 const DEVI_VIEWS = [[...SITES[4].pos, ...DEVI_FAR[4]], [...SITES[5].pos, ...DEVI_FAR[5]]];
+/* the valley below the lookout hill where Devi walks past during the observation (stage 3) */
+const DEVI_OBS = [[150, -26], [124, 18]];
+world.deviObs = DEVI_OBS;
 const R = N.rng(4242);
 const C = (h) => new THREE.Color(h);
 
@@ -156,7 +159,7 @@ function waterMaterial(flow, opts){
         vec3 nrm = normalize(vec3((st - 0.5) * 0.35, 1.0, (vn(fp * 2.0 + 7.0) - 0.5) * 0.35));
         float fres = pow(1.0 - max(dot(V, nrm), 0.0), 3.0);
         c = mix(c, uSky, fres * 0.55);
-        vec3 Hh = normalize(normalize(uSunDir) + V);
+        vec3 Hh = normalize(normalize(uSunDir) + V + vec3(0.0, 1e-3, 0.0));
         float spec = pow(max(dot(nrm, Hh), 0.0), 90.0) * 1.6;
         c += uSunCol * spec * (1.0 - uNight * 0.6);
         c += vec3(0.9, 0.95, 1.0) * smoothstep(0.62, 0.9, st) * (0.12 + uFoam * 0.6);
@@ -253,6 +256,10 @@ function forestDensity(x, z){
   d -= (1 - smoothstep(20, 60, Math.hypot(x - 190, z - 40))) * 0.5;      // lookout hill is open
   if(e > 384) d += 0.25;
   for(const [sx, sz, dx, dz] of DEVI_VIEWS) if(T.segDist(x, z, sx, sz, dx, dz) < 13) return 0;
+  for(const pd of T.PADS) if(Math.hypot(x - pd.x, z - pd.z) < pd.r + 7) return 0;
+  for(const v of T.VIEWPOINTS) if(Math.hypot(x - v.x, z - v.z) < 12) return 0;
+  if(T.segDist(x, z, DEVI_OBS[0][0], DEVI_OBS[0][1], DEVI_OBS[1][0], DEVI_OBS[1][1]) < 16) return 0;
+  if(T.segDist(x, z, SITES[3].pos[0], SITES[3].pos[1], (DEVI_OBS[0][0] + DEVI_OBS[1][0]) / 2, (DEVI_OBS[0][1] + DEVI_OBS[1][1]) / 2) < 22) return 0;
   d *= smoothstep(5, 12, rd);
   return clamp(d, 0, 0.95);
 }
@@ -530,6 +537,7 @@ world.setVillageDamage = function(level){
       mesh.setColorAt(i, col);
     });
     mesh.instanceMatrix.needsUpdate = true; if(mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
   }
   world.damage = level;
   /* smoke columns over damaged houses */
@@ -628,13 +636,18 @@ function buildSites(scene){
 
   /* ---- 3: lookout hill — stone lookout + wooden rail ---- */
   {
-    const f = F[3], B = new G.PartBuilder(), t = f.at3(5.5, 6);
+    /* the lookout tower stands behind the group, so the view down into Devi's valley stays open */
+    const f = F[3], B = new G.PartBuilder();
+    const om = [(DEVI_OBS[0][0] + DEVI_OBS[1][0]) / 2 - f.x, (DEVI_OBS[0][1] + DEVI_OBS[1][1]) / 2 - f.z], oL = Math.hypot(om[0], om[1]);
+    const tx = f.x - om[0] / oL * 8 + om[1] / oL * 5, tz = f.z - om[1] / oL * 8 - om[0] / oL * 5, t = [tx, T.ground(tx, tz), tz];
     B.add(G.lumpy(new THREE.CylinderGeometry(2.1, 2.5, 3.6, 12, 2), 0.05, 71), "#8f8676", [t[0], t[1] + 1.6, t[2]]);
     for(let i = 0; i < 8; i++){ const a = i / 8 * 6.28; B.box(0.7, 0.6, 0.6, "#8a8172", [t[0] + Math.cos(a) * 2.0, t[1] + 3.7, t[2] + Math.sin(a) * 2.0], [0, -a, 0]); }
     T.addCollider(t[0], t[2], 2.6, "tower");
-    for(let k = -7; k <= 3; k += 1.4){
-      const p = f.at3(k, 10.5); B.box(0.16, 1.2, 0.16, "#6e4b2e", [p[0], p[1] + 0.55, p[2]]);
-      if(k < 3){ const q = f.at3(k + 0.7, 10.5); B.box(1.5, 0.1, 0.1, "#7a5636", [q[0], q[1] + 1.05, q[2]], [0, f.yaw + Math.PI / 2, 0]); }
+    /* wooden observation rail on the edge facing the valley */
+    const ux = om[0] / oL, uz = om[1] / oL, rx = -uz, rz = ux, railYaw = Math.atan2(-rz, rx) - Math.PI / 2;
+    for(let k = -6; k <= 6; k += 1.5){
+      const x = f.x + ux * 9 + rx * k, z = f.z + uz * 9 + rz * k; B.box(0.16, 1.2, 0.16, "#6e4b2e", [x, T.ground(x, z) + 0.55, z]);
+      if(k < 6){ const x2 = x + rx * 0.75, z2 = z + rz * 0.75; B.box(1.6, 0.1, 0.1, "#7a5636", [x2, T.ground(x2, z2) + 1.05, z2], [0, railYaw + Math.PI / 2, 0]); }
     }
     scene.add(B.mesh());
   }
@@ -884,19 +897,9 @@ function buildLandmarks(scene){
     addSign(ox, oz, nx);
   }
   addSign(140, 84, [148, 30]); addSign(-74, -80, [-100, -120]);
-  signs.count = si; signs.instanceMatrix.needsUpdate = true; signs.castShadow = true;
+  signs.count = si; signs.instanceMatrix.needsUpdate = true; signs.castShadow = true; signs.computeBoundingSphere();
   scene.add(signs, SB.mesh());
 
-  /* shepherd's flock */
-  const S = new G.PartBuilder();
-  S.add(G.lumpy(new THREE.IcosahedronGeometry(0.62, 1), 0.12, 190), "#eee6d4", [0, 0.82, 0], null, [1.3, 0.95, 0.9]);
-  S.box(0.3, 0.32, 0.42, "#2b2522", [0, 0.98, 0.86]);
-  for(const [x, z] of [[0.35, 0.4], [-0.35, 0.4], [0.35, -0.4], [-0.35, -0.4]]) S.box(0.12, 0.5, 0.12, "#2b2522", [x, 0.25, z]);
-  const sheepGeo = S.geometry();
-  world.sheep = new THREE.InstancedMesh(sheepGeo, G.clayMat, 10); world.sheep.castShadow = true; world.sheep.receiveShadow = true;
-  world.sheepData = [];
-  for(let i = 0; i < 10; i++){ const x = 70 + R.range(-12, 12), z = 150 + R.range(-10, 10); world.sheepData.push({ x, z, tx: x, tz: z, ry: R() * 6, wait: R() * 5, bob: R() * 6 }); }
-  scene.add(world.sheep);
 }
 
 /* ====================================================================
@@ -948,6 +951,22 @@ function buildAmbient(scene){
   const flocks = [[200, 80], [-20, -20], [-200, -120]];
   for(let i = 0; i < 24; i++){ const fl = flocks[i % 3]; world.birdData.push({ cx: fl[0], cz: fl[1], r: 30 + R() * 25, h: 45 + R() * 20, a: R() * 6.28, sp: 0.15 + R() * 0.1, ph: R() * 6 }); }
   world.birds.frustumCulled = false; scene.add(world.birds);
+
+  /* valley mist at dawn, dusk and night: big soft sprites low over rivers and meadows */
+  const mt = G.puffTex();
+  world.mist = [];
+  const mistAt = [];
+  for(let i = 0; i < T.R1.length; i += 10) mistAt.push(T.R1[i]);
+  for(let i = 0; i < T.R2.length; i += 8) mistAt.push(T.R2[i]);
+  mistAt.push([110, 80], [150, 140], [70, 150], [-200, 0], [-150, -240], [220, 150], [30, 10], [-210, -110], [-60, 120], [240, 40], [-260, -150]);
+  for(const [x, z] of mistAt){
+    if(T.superR(x, z) > 400) continue;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: mt, transparent: true, depthWrite: false, opacity: 0, fog: true }));
+    const w = 34 + R() * 34; s.scale.set(w, w * 0.32, 1);
+    s.position.set(x + R.range(-8, 8), Math.max(T.ground(x, z), T.waterLevel(x, z)) + 2.2 + R() * 1.5, z + R.range(-8, 8));
+    s.userData = { base: s.position.clone(), ph: R() * 6 };
+    s.renderOrder = 4; world.mist.push(s); scene.add(s);
+  }
 
   /* fireflies around the player at night */
   const FF = 70, fg = new THREE.BufferGeometry(), fp = new Float32Array(FF * 3);
@@ -1063,6 +1082,15 @@ world.update = function(dt, t, ctx){
   const scale = ctx.renderer.domElement.height / (2 * Math.tan(cam.fov * Math.PI / 360));
   world.smokeMat.uniforms.uScale.value = scale; world.emberMat.uniforms.uScale.value = scale; world.ffUni.uScale.value = scale;
 
+  /* mist breathes slowly; colour follows the fog */
+  const mist = N.sky.mist ? N.sky.mist() : 0;
+  for(const m of world.mist){
+    m.visible = mist > 0.02;
+    if(!m.visible) continue;
+    m.material.opacity = mist * 0.55 * (0.75 + 0.25 * Math.sin(t * 0.2 + m.userData.ph));
+    m.position.x = m.userData.base.x + Math.sin(t * 0.05 + m.userData.ph) * 4;
+    if(N.sky.fogColor) m.material.color.copy(N.sky.fogColor).lerp(new THREE.Color(1, 1, 1), 0.35);
+  }
   /* birds circle by day */
   const day = 1 - night;
   world.birds.visible = day > 0.4;
@@ -1085,18 +1113,6 @@ world.update = function(dt, t, ctx){
       fpos.setXYZ(i, x, T.ground(x, z) + f.oy + Math.sin(t * 1.3 + f.ph) * 0.4, z);
     });
     fpos.needsUpdate = true;
-  }
-  /* sheep wander slowly */
-  if(Math.hypot(px - 70, pz - 150) < 200){
-    world.sheepData.forEach((s, i) => {
-      s.wait -= dt;
-      if(s.wait <= 0){ s.tx = 70 + (Math.random() - 0.5) * 30; s.tz = 150 + (Math.random() - 0.5) * 24; s.wait = 4 + Math.random() * 8; }
-      const dx = s.tx - s.x, dz = s.tz - s.z, d = Math.hypot(dx, dz);
-      if(d > 0.3){ const sp = Math.min(0.6 * dt, d); s.x += dx / d * sp; s.z += dz / d * sp; s.ry = N.dampAngle(s.ry, Math.atan2(dx, dz), 3, dt); s.bob += dt * 8; }
-      _q4.setFromAxisAngle(_up, s.ry); _v.set(s.x, T.ground(s.x, s.z) + Math.abs(Math.sin(s.bob)) * 0.05, s.z); _s3.set(1, 1, 1);
-      _m4.compose(_v, _q4, _s3); world.sheep.setMatrixAt(i, _m4);
-    });
-    world.sheep.instanceMatrix.needsUpdate = true;
   }
 };
 function isVisible(o){ while(o){ if(!o.visible) return false; o = o.parent; } return true; }

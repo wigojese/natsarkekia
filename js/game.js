@@ -34,7 +34,18 @@ function deviSpotFor(id){
 function updateDevi(id, instant){
   const dv = N.chars.devi;
   const show = id === "FINAL" ? !!(game.result && (game.result.tier === 0 || game.result.catastrophe)) : D.deviVisibleFor(id);
-  if(show){ const sp = deviSpotFor(id); if(sp && (dv.actor.opacity < 0.05 || instant || !dv.spot || dv.spot[0] !== sp[0])) dv.setSpot(sp); dv.rise = 1; }
+  if(show){
+    const sp = deviSpotFor(id);
+    if(sp && (dv.actor.opacity < 0.05 || instant || !dv.spot || Math.hypot(dv.spot[0] - sp[0], dv.spot[2] - sp[2]) > 30)){
+      dv.setSpot(sp);
+      const st = stepOf(id);
+      if(id !== "FINAL" && (st === 4 || st === 5)){                      // far away on his ridge: he paces slowly
+        const rd = st === 5 ? [-0.88, 0.48] : [0.96, -0.24];
+        dv.walk(sp[0] - rd[0] * 9, sp[2] - rd[1] * 9, sp[0] + rd[0] * 9, sp[2] + rd[1] * 9, 1.4, true, 0.5);
+      }
+    }
+    dv.rise = 1;
+  }
   dv.actor.show(show, instant);
 }
 
@@ -108,8 +119,8 @@ game.start = async function(){
   game.mode = "EXPLORE";
   game.setObjective("s1", { instant: true, silent: true });
   N.ui.hud(true); document.body.classList.add("exploring");
+  N.cine.intro(() => { if(!N.settings.tutorialSeen && game.mode === "EXPLORE") N.ui.showTutorial(); });
   await N.ui.fade(false, 600);
-  if(!N.settings.tutorialSeen) N.ui.showTutorial();
 };
 
 /* ---------------- staging for a dialogue (scripted positions) ---------------- */
@@ -148,7 +159,7 @@ function frameShot(st, dur){
   let cx = 0, cz = 0; pts.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= pts.length; cz /= pts.length;
   let spread = 0, nearest = 0;
   pts.forEach(p => { spread = Math.max(spread, Math.abs((p[0] - cx) * st.right.x + (p[1] - cz) * st.right.z)); nearest = Math.min(nearest, (p[0] - cx) * st.look.x + (p[1] - cz) * st.look.z); });
-  const cam = N.rig.camera, tanV = Math.tan(cam.fov * Math.PI / 360), tanH = tanV * cam.aspect;
+  const cam = N.rig.camera, tanV = Math.tan((N.rig.baseFov || cam.fov) * Math.PI / 360), tanH = tanV * cam.aspect;
   const gy = T.ground(cx, cz);
   const feetNDC = -1 + 2 * panelFrac() + 0.06;
   /* things whose tops must stay in frame: heads, and Devi when he is on stage */
@@ -176,7 +187,17 @@ function frameShot(st, dur){
 game.reframe = function(){ if(game.mode === "DIALOGUE" && game.stage) frameShot(game.stage, 0.7); };
 
 /* ---------------- dialogue ---------------- */
-game.openDialogue = function(id, prevIdx, instant){
+game.openDialogue = function(id, prevIdx, instant, observed){
+  N.cine.endFly && N.cine.endFly();
+  /* stage 3 (empiricism): first watch Devi walk through the valley from the lookout */
+  if((id === "t3" || id === "u3") && !instant && !observed){
+    game.mode = "DIALOGUE"; game.current = id; game.busy = true; game.observing = true;
+    document.body.classList.remove("exploring");
+    N.controls.releasePointer(); N.controls.clear();
+    N.chars.player.locked = true; N.ui.prompt(false); N.ui.closeTutorial(); N.ui.hintLine(null); N.guide.hide();
+    N.cine.observe(id, () => { game.observing = false; game.openDialogue(id, prevIdx, false, true); });
+    return;
+  }
   game.mode = "DIALOGUE"; game.current = id; game.busy = false;
   document.body.classList.remove("exploring");
   N.controls.releasePointer(); N.controls.clear();
@@ -234,6 +255,7 @@ game.choose = function(i){
     N.chars.player.locked = false;
     N.rig.follow();
     game.setObjective(next);
+    N.cine.flyover(stepOf(next));
     game.busy = false;
   }
   return next;
@@ -276,6 +298,7 @@ game.continueBridge = async function(){
   N.ui.hud(true);
   N.rig.follow();
   game.setObjective(b.next);
+  if(id !== "bridge-delayed") N.cine.flyover(stepOf(b.next));
   game.busy = false; game.busy2 = false;
 };
 
@@ -307,6 +330,8 @@ game.nearObjective = function(){
 };
 game.interact = function(){
   if(game.paused) return false;
+  if(game.mode === "EXPLORE" && N.cine.flying()){ N.cine.endFly(); return false; }
+  if(game.mode === "EXPLORE" && !game.nearObjective() && game.viewpoint){ N.cine.panorama(game.viewpoint); return false; }
   if(game.mode === "EXPLORE" && game.nearObjective()){ game.openDialogue(game.objective, game.PREV && game.PREV.stage === game.objective ? game.PREV.idx : -1); return true; }
   if(game.mode === "CINEMATIC" && !document.getElementById("bridge").hidden && document.activeElement !== document.getElementById("br-back")){ game.continueBridge(); return true; }
   return false;
@@ -324,11 +349,14 @@ game.unstick = async function(){
 };
 
 game.update = function(dt){
-  if(game.mode !== "EXPLORE" || game.paused) { N.ui.prompt(false); return; }
+  if(game.mode !== "EXPLORE" || game.paused || N.cine.flying()) { N.ui.prompt(false); return; }
   const P = N.chars.player.actor, info = game.objectiveInfo();
+  /* viewpoints on the hills: climb up and press E to look around */
+  game.viewpoint = null;
+  for(const v of T.VIEWPOINTS) if(Math.hypot(v.x - P.x, v.z - P.z) < 5){ game.viewpoint = v; break; }
   if(info){
     N.ui.setObjective(TX.goTo(info.site, Math.max(0, Math.round(info.distance))));
-    N.ui.prompt(info.distance <= D.TRIGGER_RADIUS + 0.5);
+    N.ui.prompt(info.distance <= D.TRIGGER_RADIUS + 0.5 || !!game.viewpoint);
     /* "not yet": entering a later site's trigger area (info only, never a blocker) */
     for(let s = info.step + 1; s <= 10; s++){
       const p = D.SITES[s].pos, d = Math.hypot(p[0] - P.x, p[1] - P.z);

@@ -82,6 +82,17 @@ function ridge(x, z, ax, az, bx, bz, h, w){
 }
 
 const VILLAGE = { x: 318, z: 120, r: 50 };
+/* climbable viewpoint hills (exploration, with a cairn at the top) */
+const VIEW_HILLS = [ { x: -165, z: 118, h: 26, r0: 7, r1: 70 }, { x: 255, z: -78, h: 28, r0: 7, r1: 72 }, { x: 40, z: 250, h: 22, r0: 6, r1: 60 } ];
+/* flat building pads in the forest (structures.js places the buildings) */
+const PADS = [
+  { id: "cabin", x: 60, z: -125, r: 10 }, { id: "lodge", x: -180, z: -45, r: 10 }, { id: "mill", x: -9, z: 135, r: 8 },
+  { id: "tower", x: 255, z: -78, r: 7 }, { id: "shrine", x: -165, z: 118, r: 6 }, { id: "bees", x: 205, z: 170, r: 11 },
+  { id: "kiln", x: -95, z: -175, r: 8 }, { id: "chapel", x: -235, z: 55, r: 12 }, { id: "ruin", x: -60, z: 200, r: 10 },
+  { id: "cairn", x: 40, z: 250, r: 5 }
+];
+/* viewpoints: climb up, press E, look around (cinematic panorama) */
+const VIEWPOINTS = [ { x: -165, z: 112 }, { x: 255, z: -71 }, { x: 40, z: 246 }, { x: 131, z: -138 } ];
 function segDist(x, z, ax, az, bx, bz){
   const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
   const u = clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1);
@@ -104,15 +115,16 @@ function base(x, z){
   const ring = smoothstep(368, 452, e);
   if(ring > 0){
     const west = smoothstep(80, -420, x);
-    const pk = 46 + noise.fbm(x * 0.011 + 40, z * 0.011 - 40, 5) * 44 + west * 70 + Math.abs(noise.n2(x * 0.02, z * 0.02)) * 18;
+    const pk = 42 + noise.fbm(x * 0.011 + 40, z * 0.011 - 40, 5) * 40 + west * 42 + Math.abs(noise.n2(x * 0.02, z * 0.02)) * 16;
     h += ring * pk;
   }
   /* landmarks shaped into the ground */
-  h += bump(x, z, 190, 40, 18, 9, 62);                                 // site 3 lookout hill
+  h += bump(x, z, 190, 40, 30, 10, 84);                                // site 3 lookout hill (climbable, wide view)
+  for(const v of VIEW_HILLS) h += bump(x, z, v.x, v.z, v.h, v.r0, v.r1);
   h += ridge(x, z, 40, -58, 84, -82, 13, 26);                          // ridge where Devi watches over site 5
   h += ridge(x, z, 70, 20, 120, 8, 11, 24);                            // ridge north of the test meadow (u4)
   h += bump(x, z, -286, -196, 3, 6, 28);                               // site 9 rock terrace
-  h += ridge(x, z, 110, -120, 160, -170, 22, 34);                      // chapel ridge (exploration)
+  h += ridge(x, z, 110, -120, 160, -170, 17, 46);                      // chapel ridge (exploration)
   h += bump(x, z, -150, -282, 30, 14, 34);                             // waterfall cliff above the lake
   /* black cliffs around Devi's cave, with an alcove cut in for the cave mouth */
   const dc = Math.hypot(x + 352, z + 312);
@@ -136,8 +148,10 @@ const SITE_FLAT = { 1: [22, 30], 2: [14, 24], 3: [10, 18], 4: [16, 28], 5: [12, 
 const siteH = {};
 function shapedNoSites(x, z){ return villageShape(x, z, base(x, z)); }
 for(let i = 1; i <= 10; i++){ const p = SITES[i].pos; siteH[i] = shapedNoSites(p[0], p[1]); }
+for(const pd of PADS) pd.h = shapedNoSites(pd.x, pd.z);
 function shaped(x, z){
   let h = shapedNoSites(x, z);
+  for(const pd of PADS){ const d = Math.hypot(x - pd.x, z - pd.z); if(d < pd.r * 1.5) h = lerp(h, pd.h, 1 - smoothstep(pd.r * 0.75, pd.r * 1.5, d)); }
   const ca = segDist(x, z, CAVE.x0, CAVE.z0, CAVE.x1, CAVE.z1);
   if(ca < 7.5) h = lerp(h, siteH[10] + 0.1, 1 - smoothstep(4.0, 7.2, ca));
   for(let i = 1; i <= 10; i++){
@@ -354,6 +368,6 @@ N.terrain = {
   HALF, SEGS, CELL, V, H, WL, PLAY, MAX_SLOPE, noise, ROAD, PATHS, R1, R2, R1WL, R2WL, LAKE, LAKE_LEVEL, FORDS, BRIDGE, VILLAGE, VILLAGE_H,
   roadIdx, r1Idx, r2Idx, ground, walkHeight, waterLevel, waterDepth, gradient, slope, normal, onBridge, bridgeLocal, deckHeight,
   addCollider, addBoxCollider, nearbyColliders, collidersAround, walkable, moveCircle, superR,
-  roadDist, riverDist, siteDist, surfaceType, roadPointAt, roadT, siteH, CAVE, segDist
+  roadDist, riverDist, siteDist, surfaceType, roadPointAt, roadT, siteH, CAVE, segDist, VIEW_HILLS, PADS, VIEWPOINTS
 };
 })();

@@ -81,6 +81,11 @@ A.rumble = function(){
   setTimeout(() => A.ready && burst(A.master, "lowpass", 90, 0.8, 0.6, 0.3, 3, 0.4), 1200);
 };
 
+A.thud = function(k){
+  if(!A.ready) return;
+  tone(48, "sine", 0.32 * k + 0.05, 0.01, 0.6);
+  burst(A.master, "lowpass", 160, 0.8, 0.25 * k + 0.03, 0.005, 0.35, 0.6);
+};
 A.update = function(dt, s){
   if(!A.ready) return;
   const c = A.ctx, t = c.currentTime, night = s.night;

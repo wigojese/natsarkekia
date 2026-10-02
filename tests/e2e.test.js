@@ -63,11 +63,12 @@ async function playStage(p, choices, snaps, name){
     ok((await S(p)).mode === "EXPLORE", `${name}: still exploring`);
   }
   await p.evaluate((i) => __NATS__.teleportToSite(i), id);
-  const shown = await p.waitForFunction(() => __NATS__.getState().prompt, null, { timeout: 5000 }).then(() => true, () => false);
+  const shown = await p.waitForFunction(() => __NATS__.getState().prompt, null, { timeout: 12000 }).then(() => true, () => false);
   ok(shown, `${name}: prompt at ${id}`);
   snaps.push({ id, step, before: await S(p) });
   ok(await p.evaluate(() => __NATS__.interact()) === true, `${name}: interact opens ${id}`);
-  await p.waitForFunction(() => __NATS__.getState().dialogueOpen, null, { timeout: 15000 });
+  if(id === "t3" || id === "u3"){ await p.waitForTimeout(600); ok(await p.evaluate(() => __NATS__.getState().devi), `${name}: Devi walks through the valley at ${id}`); await p.evaluate(() => __NATS__.skipCinematic()); }
+  await p.waitForFunction(() => __NATS__.getState().dialogueOpen, null, { timeout: 30000 });
   const fits = await p.evaluate(() => NATS.ui.dialogueFits());
   ok(fits, `${name}: dialogue fits at ${id}`);
   const next = await p.evaluate((i) => __NATS__.answer(i), choices[id]);

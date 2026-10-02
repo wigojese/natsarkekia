@@ -19,7 +19,8 @@ const rig = {
       const x = tx + dx * d, y = ty + dy * d, z = tz + dz * d;
       if(T.ground(x, z) + 0.45 > y){ ok = Math.max(1.2, d - 0.4); break; }
       let hit = false;
-      for(const c of T.collidersAround(x, z, 1)){
+      for(const c of T.collidersAround(x, z, 3)){
+        if(c.tag === "tree"){ const g = T.ground(c.x, c.z); if(y > g + 1.8 && y < g + 8 && Math.hypot(x - c.x, z - c.z) < c.r * 5){ hit = true; break; } continue; }
         if((c.tag === "house" || c.tag === "wall" || c.tag === "tower" || c.tag === "tent" || c.tag === "chapel" || c.tag === "hut" || c.tag === "oak" || c.tag === "gate")
            && Math.hypot(x - c.x, z - c.z) < c.r + 0.3 && y < T.ground(c.x, c.z) + (c.tag === "tower" ? 17 : c.tag === "oak" ? 12 : 7.5)){ hit = true; break; }
       }
@@ -29,7 +30,7 @@ const rig = {
   },
   /* ease to a framing shot: pos/look are THREE.Vector3 */
   shotTo(pos, look, dur){
-    this.mode = "shot";
+    this.mode = "shot"; this.path = null;
     this.shot = { p0: this.camera.position.clone(), l0: this.target.clone(), p1: pos.clone(), l1: look.clone(), t: 0, dur: dur == null ? 1.2 : dur };
     if(this.shot.dur <= 0){ this.shot.t = 1; }
   },
@@ -42,9 +43,18 @@ const rig = {
     this.wantDist = this.curDist = this.dist = clamp(d, 4, 12);
     this.mode = "follow"; this.shot = null; this.orbit = null;
   },
+  /* cinematic camera path: Catmull-Rom through positions and look targets */
+  playPath(keys, dur, onDone){
+    this.mode = "path";
+    this.path = { keys: [{ p: this.camera.position.clone(), l: this.target.clone() }, ...keys], t: 0, dur, onDone };
+  },
+  stopPath(){ if(this.mode === "path"){ this.path = null; this.mode = "shot"; this.shot = { p0: this.camera.position.clone(), l0: this.target.clone(), p1: this.camera.position.clone(), l1: this.target.clone(), t: 1, dur: 1 }; } },
   startOrbit(center, radius, height, speed, arc){ this.mode = "orbit"; this.orbit = { c: center.clone(), r: radius, h: height, sp: speed, a: Math.atan2(this.camera.position.x - center.x, this.camera.position.z - center.z), arc: arc || 0, a0: null, t: 0 }; },
   update(dt, look, focus){
     const cam = this.camera;
+    /* telephoto zoom for cinematic moments, back to normal otherwise */
+    const wantFov = this.fovTarget || this.baseFov || cam.fov;
+    if(Math.abs(cam.fov - wantFov) > 0.05){ cam.fov = damp(cam.fov, wantFov, 1.4, dt); cam.updateProjectionMatrix(); }
     if(this.mode === "follow"){
       this.yaw -= look[0]; this.pitch = clamp(this.pitch + look[1], -0.12, 1.05);
       this.wantDist = clamp(this.wantDist + look[2], 4, 12);
@@ -61,6 +71,19 @@ const rig = {
       const e = easeInOut(s.t);
       cam.position.lerpVectors(s.p0, s.p1, e); this.target.lerpVectors(s.l0, s.l1, e);
       cam.lookAt(this.target);
+    } else if(this.mode === "path" && this.path){
+      const P = this.path; P.t = Math.min(1, P.t + dt / P.dur);
+      const e = easeInOut(P.t), n = P.keys.length - 1, f = e * n, i = Math.min(n - 1, Math.floor(f)), u = f - i;
+      const cr = (k, a, b, c, d) => { const u2 = u * u, u3 = u2 * u; return 0.5 * ((2 * b[k]) + (-a[k] + c[k]) * u + (2 * a[k] - 5 * b[k] + 4 * c[k] - d[k]) * u2 + (-a[k] + 3 * b[k] - 3 * c[k] + d[k]) * u3); };
+      const K = (j, w) => P.keys[Math.max(0, Math.min(n, j))][w];
+      for(const w of ["p", "l"]){
+        const a = K(i - 1, w), b = K(i, w), c = K(i + 1, w), d = K(i + 2, w);
+        const v = w === "p" ? cam.position : this.target;
+        v.set(cr("x", a, b, c, d), cr("y", a, b, c, d), cr("z", a, b, c, d));
+      }
+      const g = T.ground(cam.position.x, cam.position.z) + 0.8; if(cam.position.y < g) cam.position.y = g;
+      cam.lookAt(this.target);
+      if(P.t >= 1){ const cb = P.onDone; this.path = null; this.mode = "shot"; this.shot = { p0: cam.position.clone(), l0: this.target.clone(), p1: cam.position.clone(), l1: this.target.clone(), t: 1, dur: 1 }; if(cb) cb(); }
     } else if(this.mode === "orbit" && this.orbit){
       const o = this.orbit; o.t += dt;
       let a;
@@ -69,6 +92,7 @@ const rig = {
       const g = T.ground(cam.position.x, cam.position.z) + 1; if(cam.position.y < g) cam.position.y = g;
       this.target.lerp(o.c, 1 - Math.exp(-3 * dt)); cam.lookAt(this.target);
     }
+    /* "manual": a cinematic drives the camera directly */
     if(this.shake > 0 && !N.settings.reducedMotion){
       const k = this.shake;
       cam.position.x += (Math.random() - 0.5) * k * 0.5; cam.position.y += (Math.random() - 0.5) * k * 0.4; cam.position.z += (Math.random() - 0.5) * k * 0.5;

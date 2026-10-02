@@ -20,12 +20,21 @@ Open `index.html` by double-clicking it. You don't need a server or a build step
 
 A gamepad also works: left stick to move, right stick for the camera, A to interact and Start to pause.
 
+## Exploring
+
+- **Watching Devi (stage 3):** climb the lookout hill. When you talk there, you first watch Devi stride through the valley below, and then the question appears.
+- **Viewpoint hills:** three hills (with a cairn and a bench) plus the chapel ridge. Climb up and press `E` for a slow panorama.
+- **Forest buildings:** a woodcutter's cabin, a hunter's lodge, a watermill with a turning wheel, a ruined watchtower, a stone cross, beehives, a charcoal kiln, a small church and an old ruin.
+- **Animals:** deer herds, rabbits, foxes, wild boars, bears, sheep, cows, horses, chickens, ducks, eagles and butterflies. Shy animals run away when you come close.
+- **Cinematic shots:** a sunrise over the village at the start, and a short flyover to the next place after each decision. Any key or tap skips them; reduced motion turns them off.
+
 ## Project structure (one language per file)
 
 ```
 index.html            page structure only
 css/style.css         all styles (2D game palette: parchment / ink / gold / ember)
 js/vendor/three.min.js  Three.js r170, pinned and vendored (offline), MIT licence alongside
+js/vendor/three-addons.min.js  Three.js post-processing passes (bloom, composer) bundled for classic scripts
 js/images.js          the six original images as data URIs (see below)
 js/data.js            STAGES, BRIDGES, PRESETS, TIER_META copied verbatim from the 2D game + 3D UI strings, sites
 js/scoring.js         pure functions: newState, applyChoice, computeResult, closingText, buildTale, pathLabel
@@ -33,14 +42,17 @@ js/core.js            namespace, math, seeded noise, settings, event bus
 js/terrain.js         seeded heightmap with hand-placed constraints, road, rivers, fords, bridge, colliders
 js/geom.js            low-poly part builder, instancing chunks, procedural canvas textures, sway shader
 js/sky.js             sky dome with the 2D gradients, sun/moon, stars, clouds, fog, tint, preset blending
-js/world.js           terrain mesh, road, water, forest, village (damage states), the ten sites, landmarks, ambient life
+js/world.js           terrain mesh, road, water, forest, village (damage states), the ten sites, landmarks, mist, ambient life
+js/structures.js      forest buildings: cabin, hunter's lodge, watermill, watchtower, stone cross, apiary, kiln, church, ruin, cairns
+js/fauna.js           animals: deer, rabbits, foxes, boars, bears, sheep, cows, horses, chickens, ducks, eagles, butterflies
 js/characters.js      camera-facing billboards (lit, rim, silhouette shadows), player, companions, Devi
 js/controls.js        keyboard, mouse, touch, gamepad
-js/camera.js          third-person rig with collision, framing shots, orbit, shake
+js/camera.js          third-person rig with collision, framing shots, spline camera paths, orbit, shake
+js/post.js            light rays from the sun/moon, lens flare, bloom (Medium/High quality)
 js/audio.js           WebAudio synthesis (no audio files)
 js/ui.js              title, HUD, dialogue panel (auto-fit), bridge card, final screen + tale, pause, tutorial
 js/guidance.js        beacon, ground ring, compass, edge arrow, mini-map + fog of war, big map, A* breadcrumb, idle hints
-js/cinematics.js      the five bridge scenes and the final tableau
+js/cinematics.js      bridge scenes, final tableau, sunrise intro, flyovers to each new site, Devi observation, hill panoramas
 js/game.js            state machine and flow: objective, dialogue, choose(), goBack(), final
 js/main.js            boot, render loop, quality levels + automatic governor, debug API
 tests/                Node logic tests and Playwright browser tests

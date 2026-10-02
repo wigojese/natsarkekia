@@ -29,6 +29,7 @@ function applyQuality(q){
     if(sun.shadow.mapSize.x !== Q.shadow){ sun.shadow.mapSize.set(Q.shadow, Q.shadow); if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map = null; } }
   } else { sun.castShadow = false; }
   N.world.setQuality(q);
+  if(N.post.composer){ N.post.setQuality(q); N.post.setSize(window.innerWidth, window.innerHeight); }
   document.body.classList.remove("q-low", "q-medium", "q-high"); document.body.classList.add("q-" + q);
   scene.traverse(o => { if(o.material && o.material.needsUpdate !== undefined && o.isMesh) o.material.needsUpdate = true; });
   N.saveSettings();
@@ -36,9 +37,10 @@ function applyQuality(q){
 function resize(){
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h;
-  camera.fov = w / h < 0.8 ? 62 : 50;
+  camera.fov = N.rig.baseFov = w / h < 0.8 ? 62 : 50;
   camera.updateProjectionMatrix();
   N.sky.starUni.uPR.value = renderer.getPixelRatio();
+  N.post.setSize(w, h);
 }
 
 /* ---------------- pause menu ---------------- */
@@ -72,8 +74,8 @@ function boot(){
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   }catch(e){ ui.error(TX.webglError); return; }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.info.autoReset = false;
   document.getElementById("view").appendChild(renderer.domElement);
   renderer.domElement.addEventListener("webglcontextlost", (e) => { e.preventDefault(); ui.error(TX.webglError); });
 
@@ -81,9 +83,12 @@ function boot(){
   camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2400);
   N.sky.init(scene);
   N.world.build(scene);
+  N.structures.build(scene);
+  N.fauna.build(scene);
   N.chars.init(scene);
   N.rig.init(camera);
   N.guide.init(scene);
+  N.post.init(renderer, scene, camera);
   N.controls.init(renderer.domElement);
   ui.init();
   N.three = { renderer, scene, camera };
@@ -127,7 +132,7 @@ function boot(){
 /* ---------------- loop ---------------- */
 let simT = 0;
 function loop(){
-  const rawDt = Math.min(clock.getDelta(), 0.1);
+  const delta = clock.getDelta(), rawDt = Math.min(delta, 0.1), cineDt = game.paused ? 0 : Math.min(delta, 0.35);
   const dt = game.paused ? 0 : rawDt;
   simT += dt;
   N.shared.uTime.value = simT;
@@ -138,8 +143,8 @@ function loop(){
   const exploring = game.mode === "EXPLORE" && !game.paused;
   N.chars.update(dt, simT, camera, exploring ? N.controls.input : { x: 0, y: 0, run: false }, camYaw, N.sky.charLight);
   if(exploring && N.controls.input.active) ui.closeTutorial();
-  N.rig.update(rawDt, game.paused ? [0, 0, 0] : look, { x: P.x, y: P.y, z: P.z });
-  N.cine.update(dt);
+  N.rig.update(N.rig.mode !== "follow" ? cineDt : rawDt, game.paused ? [0, 0, 0] : look, { x: P.x, y: P.y, z: P.z });
+  N.cine.update(cineDt);
   game.update(dt);
   /* red fog close to Devi's cave at night */
   const dc = Math.hypot(P.x + 334, P.z + 298);
@@ -147,12 +152,17 @@ function loop(){
   N.sky.update(rawDt, camera, P);
   const fire = N.world.nearestFire(P.x, P.z);
   N.world.update(dt, simT, { camera, focus: P, renderer });
+  N.structures.update(dt, simT, P);
+  N.fauna.update(dt, simT, P);
   N.guide.update(rawDt, simT, { player: P, camera, camYaw, exploring, hudVisible: !document.getElementById("hud").hidden,
     companions: [...N.chars.companions.following].map(k => N.chars.byKey[k]), playerVX: P.vx, playerVZ: P.vz, moving: P.speed > 0.4 });
   const dv = N.chars.devi.actor;
   N.audio.update(rawDt, { night: N.sky.nightness(), paused: game.paused, fire: fire ? Math.max(0, 1 - fire.d / 18) : 0,
     devi: dv.opacity * Math.max(0, 1 - Math.hypot(dv.x - P.x, dv.z - P.z) / 140) });
-  renderer.render(scene, camera);
+  if((frames & 7) === 0) N.post.updateSunVisibility();
+  renderer.toneMappingExposure = 1.0 + N.sky.nightness() * 0.22;
+  renderer.info.reset();
+  N.post.render();
   /* fps + automatic quality governor (drops a level if < 40 fps for 3 s) */
   frames++; fpsAcc += rawDt;
   if(fpsAcc >= 0.5){ fpsVal = frames / fpsAcc; frames = 0; fpsAcc = 0;
@@ -176,6 +186,7 @@ window.__NATS__ = {
   },
   getObjective(){ return game.objectiveInfo(); },
   teleportToSite(stageId){
+    N.cine.endFly();
     const step = D.STAGES[stageId] ? D.STAGES[stageId].step : +stageId; if(!step) return false;
     const f = N.world.frames[step], p = f.at(0, -2.5), s = N.chars.safeNear(p[0], p[1], { x: f.x, z: f.z });
     N.chars.player.actor.place(s[0], s[1]);

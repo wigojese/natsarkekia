@@ -14,6 +14,7 @@ const path = require("path");
   await p.waitForFunction(() => window.__NATS__ && !document.getElementById("title").hidden, null, { timeout: 120000 });
   await p.click("#start-btn");
   await p.waitForFunction(() => __NATS__.getState().mode === "EXPLORE");
+  await p.evaluate((q) => q && __NATS__.setQuality(q), process.env.Q || "");
   await p.waitForTimeout(3000);
   const st = () => p.evaluate(() => __NATS__.getState());
   let n = 0;
@@ -36,12 +37,14 @@ const path = require("path");
     await p.waitForTimeout(6000);   // time of day transition
     await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-explore-${obj}.png` });
     const ok = await p.evaluate(() => __NATS__.interact());
+    if(obj === "t3" || obj === "u3"){ await p.waitForTimeout(4000); await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-observe-${obj}.png` }); await p.waitForTimeout(3500); await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-observe2-${obj}.png` }); await p.evaluate(() => __NATS__.skipCinematic()); await p.waitForFunction(() => __NATS__.getState().dialogueOpen, null, { timeout: 30000 }); }
     if(!ok){ console.log("interact failed at", obj, JSON.stringify(await p.evaluate(() => __NATS__.getObjective()))); break; }
     await p.waitForTimeout(2600);
     await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-dialogue-${obj}.png` });
     const step = (await p.evaluate((id) => NATS.data.STAGES[id].step, obj));
     await p.evaluate((i) => __NATS__.answer(i), answers[step - 1]);
     await p.waitForTimeout(1200);
+    if(step === 4 || step === 8){ await p.waitForTimeout(2600); await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-flyover-after-${obj}.png` }); }
   }
   await p.waitForTimeout(3000);
   await p.screenshot({ path: `${out}/${String(++n).padStart(2, "0")}-final.png` });
