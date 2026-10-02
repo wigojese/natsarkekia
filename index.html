@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="ნაცარქექია სქრამის მიხედვით — 3D">
+<title>ნაცარქექია სქრამის მიხედვით</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Georgian:wght@400;600;700;900&family=Noto+Sans+Georgian:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game">
+  <!-- 3D view + screen-space post effects -->
+  <div id="view"></div>
+  <div id="tint"></div>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+  <div id="tiltshift"><div class="ts ts-top"></div><div class="ts ts-bottom"></div></div>
+  <div id="letterbox"><div class="lb lb-top"></div><div class="lb lb-bottom"></div></div>
+
+  <!-- touch controls -->
+  <div id="touch-zone"></div>
+  <div id="joy-base"><div id="joy-knob"></div></div>
+
+  <!-- exploration HUD -->
+  <div id="hud" hidden>
+    <div id="hud-tl">
+      <div id="trail" class="trail"></div>
+      <div id="objective"><span class="obj-label"></span> <span class="obj-text"></span></div>
+    </div>
+    <div id="compass" aria-hidden="true"><div id="compass-strip"></div><div class="compass-tick"></div></div>
+    <div id="hud-tr">
+      <div id="roster" class="roster"></div>
+      <div class="hud-btns">
+        <button id="btn-sound" class="icon-btn" aria-label="ხმა"></button>
+        <button id="btn-pause" class="icon-btn" aria-label="პაუზა">❚❚</button>
+      </div>
+    </div>
+    <div id="minimap-wrap"><canvas id="minimap" width="220" height="220"></canvas></div>
+    <div id="edge-arrow" aria-hidden="true"></div>
+    <div id="prompt" aria-live="polite"></div>
+    <div id="hint-line" aria-live="polite"></div>
+    <div id="toast" aria-live="polite"></div>
+    <div id="touch-btns">
+      <button id="btn-hint" class="icon-btn round" aria-label="H">✦</button>
+      <button id="btn-map" class="icon-btn round" aria-label="M">◎</button>
+      <button id="btn-talk" class="btn talk"></button>
+    </div>
+  </div>
+
+  <!-- dialogue / bridge / final / pause / map / tutorial / title -->
+  <section id="dialogue" class="panel" hidden></section>
+  <section id="bridge" class="panel bridge-card" hidden></section>
+  <section id="final" hidden><div id="final-panel"></div></section>
+  <section id="pause" class="overlay" hidden><div class="pause-card"></div></section>
+  <section id="bigmap" class="overlay" hidden><canvas id="bigmap-canvas" width="900" height="900"></canvas></section>
+  <section id="tutorial" hidden></section>
+  <section id="title" class="screen" hidden></section>
+
+  <div id="fade"></div>
+  <div id="loading"><div class="spinner"></div><p>იტვირთება…</p></div>
+  <div id="error" hidden></div>
+</div>
+
+<script src="js/vendor/three.min.js"></script>
+<script src="js/images.js"></script>
+<script src="js/data.js"></script>
+<script src="js/scoring.js"></script>
+<script src="js/core.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/geom.js"></script>
+<script src="js/sky.js"></script>
+<script src="js/world.js"></script>
+<script src="js/characters.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/guidance.js"></script>
+<script src="js/cinematics.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
